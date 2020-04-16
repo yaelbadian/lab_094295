@@ -13,28 +13,35 @@ class Preproccess:
         data = Preproccess.extraced_json_columns(train.copy())
         self.languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
         self.top_genres = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
-        self.cnt_production_companies = Counter(data['production_companies_names'].sum())
-        self.ids_production_companies = Preproccess.map_to_ids(data, 'production_companies_names', 10)
-        self.cnt_production_countries = Counter(data['production_countries_names'].sum())
-        self.cnt_cast = Counter(data['cast_names'].sum())
-        self.cnt_crew = Counter(data['crew_names'].sum())
+        self.top_countries = [x[0] for x in Counter(data['production_companies_names'].sum()) if x[1] > 50]
 
+        self.cnts = {'production_companies_names': Counter(data['production_companies_names'].sum()),
+                     'production_countries_names': Counter(data['production_countries_names'].sum()),
+                     'cast_names': Counter(data['cast_names'].sum()),
+                     'crew_names': Counter(data['crew_names'].sum())}
 
+        self.ids = {}
+        self.mlkrs = {}
+        Preproccess.create_embedding(self, data, 'production_companies_names', threshold=0, n_components=5)
+        Preproccess.create_embedding(self, data, 'cast_names', threshold=0, n_components=5)
+        Preproccess.create_embedding(self, data, 'crew_names', threshold=0, n_components=5)
+        Preproccess.create_embedding(self, data, 'Keywords_names', threshold=10, n_components=10)
 
         # self.keywords = Counter(data[''].sum()).most_common()
-
 
     def preprocessing(self, data):
         data = Preproccess.extraced_json_columns(data)
         data = Preproccess.list2binary(data, 'genres_names', self.top_genres)
-        data = self.count_instances(data, 'production_companies_names', self.cnt_production_companies, 1, 3)
-        data = self.count_instances(data, 'production_companies_names', self.cnt_production_companies, 4, 10)
-
-        data = self.count_instances(data, 'production_countries_names', self.cnt_production_countries, 0, 10)
-        data = self.count_instances(data, 'production_countries_names', self.cnt_production_countries, 11, 50)
-
-        data = self.count_instances(data, 'cast_names', self.cnt_cast, 4, 10000)
-
+        data = self.count_instances(data, 'production_companies_names', 1, 3)
+        data = self.count_instances(data, 'production_companies_names', 4, 10)
+        data = Preproccess.embedding(self, data, 'production_companies_names')
+        data = self.count_instances(data, 'production_countries_names', 0, 10)
+        data = self.count_instances(data, 'production_countries_names', 11, 50)
+        data = Preproccess.list2binary(data, 'production_countries_names', self.top_countries)
+        data = self.count_instances(data, 'cast_names', 4, 10000)
+        data = Preproccess.embedding(self, data, 'cast_names')
+        data = Preproccess.embedding(self, data, 'crew_names')
+        data = Preproccess.embedding(self, data, 'Keywords_names')
 
         # # original_language
         #
@@ -60,7 +67,8 @@ class Preproccess:
 
         print(data.columns)
 
-    def count_instances(self, data, col, counter, l, u):
+    def count_instances(self, data, col, l, u):
+        counter = self.cnts[col]
         new_col = col + '_' + str(l) + '-' + str(u)
         data[new_col] = data[col].apply(lambda x: len([ele for ele in x if l <= counter[ele] <= u]))
         return data
@@ -70,10 +78,19 @@ class Preproccess:
         cnt = [x[0] for x in Counter(df[col].sum()).most_common() if x[1] > threshold]
         return {x: i for i, x in enumerate(cnt)}
 
+    def create_embedding(self, data, col, threshold=0, n_components=5):
+        self.ids[col] = Preproccess.map_to_ids(data, col, threshold)
+        mat = Preproccess.list2vector(data, col, self.ids[col])
+        self.mlkrs[col] = MLKR(n_components, verbose=True, max_iter=10)
+        self.mlkrs[col].fit(mat, data['revenue'])
+
+    def embedding(self, data, col):
+        mat = Preproccess.list2vector(data, col, self.ids[col])
+        return data.join(pd.DataFrame(self.mlkrs[col].transform(mat)).add_prefix(col + '_'))
 
 
     @staticmethod
-    def json_columns_handler(data, genders=False, jobs=False):
+    def json_columns_handler(data):
         features = {}
         if isinstance(data, str):
             data = eval(data)
@@ -84,12 +101,6 @@ class Preproccess:
         names = [ele.get('name') for ele in data if 'name' in ele]
         n = len(names)
         features.update({'names': names, 'len': n})
-        # if genders and n > 0:
-        #     genders_cnt = Counter([ele.get('gender') for ele in data if 'gender' in ele])
-        #     features.update({'g:{}'.format(str(k).replace(' ', '_')): v / n for k, v in genders_cnt.items()})
-        if jobs:
-            jobs_cnt = Counter([ele.get('job') for ele in data if 'job' in ele])
-            features.update({'j:{}'.format(str(k).replace(' ', '_')): v for k, v in jobs_cnt.items()})
         return pd.Series(features)
 
     @staticmethod
@@ -103,13 +114,13 @@ class Preproccess:
         col = 'production_countries'
         data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
         # col = 'spoken_languages'
-        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-        # col = 'Keywords'
-        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-        # col = 'cast'
-        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,True, False)).add_prefix(f'{col}_'))
-        # col = 'crew'
-        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,True, True)).add_prefix(f'{col}_'))
+        # data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        col = 'Keywords'
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        col = 'cast'
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        col = 'crew'
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, True)).add_prefix(f'{col}_'))
         return data
 
     @staticmethod
@@ -135,11 +146,22 @@ class Preproccess:
                 vectors[i] = 0
         return vectors[list(range(len(ids)))]
 
-
+    def extract_jobs_features(self, data):
+        features = {}
+        if isinstance(data, str):
+            data = eval(data)
+        if isinstance(data, dict):
+            data = [data]
+        elif not isinstance(data, list):
+            data = []
+        jobs_cnt = Counter([ele.get('job') for ele in data if 'job' in ele])
+        features.update({'j:{}'.format(str(k).replace(' ', '_')): v for k, v in jobs_cnt.items()})
+        features.update({'jobs_len': len(jobs_cnt)})
+        return pd.Series(features)
 
 
 if __name__ == '__main__':
-    file_path = r"C:\Users\YaelBadian\Documents\technion\lab\train.tsv"
+    file_path = 'train.tsv'
     data = pd.read_csv(file_path, sep="\t")
     preproccess = Preproccess(data)
     preproccess.preprocessing(data)
