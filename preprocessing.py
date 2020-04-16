@@ -3,79 +3,143 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import Counter
+from metric_learn import MLKR
+from sklearn.preprocessing import StandardScaler
 sns.set()
 
-pd.options.display.max_rows = 100
-pd.options.display.max_columns = 100
-pd.options.display.max_colwidth = 1000
 
-file_path = r"C:\Users\YaelBadian\Documents\technion\lab\train.tsv"
-data = pd.read_csv(file_path, sep="\t")
-
-
-def json_columns_handler(data, genders=False, jobs=False):
-    features = {}
-    if isinstance(data, str):
-        data = eval(data)
-    if isinstance(data, dict):
-        data = [data]
-    elif not isinstance(data, list):
-        data = []
-    names = [ele.get('name') for ele in data if 'name' in ele]
-    n = len(names)
-    features.update({'names': names, 'len': n})
-    # if genders and n > 0:
-    #     genders_cnt = Counter([ele.get('gender') for ele in data if 'gender' in ele])
-    #     features.update({'g:{}'.format(str(k).replace(' ', '_')): v / n for k, v in genders_cnt.items()})
-    if jobs:
-        jobs_cnt = Counter([ele.get('job') for ele in data if 'job' in ele])
-        features.update({'j:{}'.format(str(k).replace(' ', '_')): v for k, v in jobs_cnt.items()})
-    return pd.Series(features)
+class Preproccess:
+    def __init__(self, train):
+        data = Preproccess.extraced_json_columns(train.copy())
+        self.languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
+        self.top_genres = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
+        self.cnt_production_companies = Counter(data['production_companies_names'].sum())
+        self.ids_production_companies = Preproccess.map_to_ids(data, 'production_companies_names', 10)
+        self.cnt_production_countries = Counter(data['production_countries_names'].sum())
+        self.cnt_cast = Counter(data['cast_names'].sum())
+        self.cnt_crew = Counter(data['crew_names'].sum())
 
 
-def json2counter(df, col, top=None):
-    values = df[col].apply(lambda x: json_columns_handler(x, False, False))['names'].sum()
-    return Counter(values).most_common(top)
+
+        # self.keywords = Counter(data[''].sum()).most_common()
 
 
-# col = 'genres'
-# data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-col = 'belongs_to_collection'
-data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-# col = 'production_companies'
-# data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-# col = 'production_countries'
-# data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-# col = 'spoken_languages'
-# data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-# col = 'Keywords'
-# data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
-# col = 'cast'
-# data = data.join(data[col].apply(lambda x: json_columns_handler(x,True, False)).add_prefix(f'{col}_'))
-# col = 'crew'
-# data = data.join(data[col].apply(lambda x: json_columns_handler(x,True, True)).add_prefix(f'{col}_'))
+    def preprocessing(self, data):
+        data = Preproccess.extraced_json_columns(data)
+        data = Preproccess.list2binary(data, 'genres_names', self.top_genres)
+        data = self.count_instances(data, 'production_companies_names', self.cnt_production_companies, 1, 3)
+        data = self.count_instances(data, 'production_companies_names', self.cnt_production_companies, 4, 10)
+
+        data = self.count_instances(data, 'production_countries_names', self.cnt_production_countries, 0, 10)
+        data = self.count_instances(data, 'production_countries_names', self.cnt_production_countries, 11, 50)
+
+        data = self.count_instances(data, 'cast_names', self.cnt_cast, 4, 10000)
 
 
-# original_language
-languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
-data.loc[data['original_language'].isin(languages) == False, 'original_language'] = 'other'
-data = pd.get_dummies(data, columns=['original_language'])
+        # # original_language
+        #
+        # data.loc[data['original_language'].isin(self.languages) == False, 'original_language'] = 'other'
+        # data = pd.get_dummies(data, columns=['original_language'])
+        #
+        # # release_date
+        # data['release_date'] = pd.to_datetime(data['release_date'])
+        # data['year'] = data['release_date'].dt.year
+        # data['month'] = data['release_date'].dt.month
+        #
+        # data['revenue'] = np.log(data['revenue'] + 1)
+        # data['no_budget'] = data['budget'] == 0
+        # data['budget'] = np.log(data['budget'] + 1)
+        # data['is_collection'] = data['belongs_to_collection_len'] > 0
+        # data['homepage'] = data['homepage'].notna()
+        # data['poster_path'] = data['poster_path'].notna()
+        # data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
+        #
+        data = data.drop(
+            columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
+                     'release_date'])
 
-# release_date
-data['release_date'] = pd.to_datetime(data['release_date'])
-data['year'] = data['release_date'].dt.year
-data['month'] = data['release_date'].dt.month
+        print(data.columns)
+
+    def count_instances(self, data, col, counter, l, u):
+        new_col = col + '_' + str(l) + '-' + str(u)
+        data[new_col] = data[col].apply(lambda x: len([ele for ele in x if l <= counter[ele] <= u]))
+        return data
+
+    @staticmethod
+    def map_to_ids(df, col, threshold=0):
+        cnt = [x[0] for x in Counter(df[col].sum()).most_common() if x[1] > threshold]
+        return {x: i for i, x in enumerate(cnt)}
 
 
-data['revenue'] = np.log(data['revenue'] + 1)
-data['no_budget'] = data['budget'] == 0
-data['budget'] = np.log(data['budget'] + 1)
-data['is_collection'] = data['belongs_to_collection_len'] > 0
-data['homepage'] = data['homepage'].notna()
-data['poster_path'] = data['poster_path'].notna()
-data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
+
+    @staticmethod
+    def json_columns_handler(data, genders=False, jobs=False):
+        features = {}
+        if isinstance(data, str):
+            data = eval(data)
+        if isinstance(data, dict):
+            data = [data]
+        elif not isinstance(data, list):
+            data = []
+        names = [ele.get('name') for ele in data if 'name' in ele]
+        n = len(names)
+        features.update({'names': names, 'len': n})
+        # if genders and n > 0:
+        #     genders_cnt = Counter([ele.get('gender') for ele in data if 'gender' in ele])
+        #     features.update({'g:{}'.format(str(k).replace(' ', '_')): v / n for k, v in genders_cnt.items()})
+        if jobs:
+            jobs_cnt = Counter([ele.get('job') for ele in data if 'job' in ele])
+            features.update({'j:{}'.format(str(k).replace(' ', '_')): v for k, v in jobs_cnt.items()})
+        return pd.Series(features)
+
+    @staticmethod
+    def extraced_json_columns(data):
+        col = 'genres'
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        col = 'belongs_to_collection'
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        col = 'production_companies'
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        col = 'production_countries'
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        # col = 'spoken_languages'
+        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        # col = 'Keywords'
+        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        # col = 'cast'
+        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,True, False)).add_prefix(f'{col}_'))
+        # col = 'crew'
+        # data = data.join(data[col].apply(lambda x: json_columns_handler(x,True, True)).add_prefix(f'{col}_'))
+        return data
+
+    @staticmethod
+    def json2counter(df, col, top=None):
+        values = df[col].apply(lambda x: Preproccess.json_columns_handler(x, False, False))['names'].sum()
+        return Counter(values).most_common(top)
+
+    @staticmethod
+    def list2binary(df, col, cnt):
+        def list_handler(ls):
+            return pd.Series({'{}_{}'.format(col, str(k).replace(' ', '_')): 1 for k in ls if k in cnt})
+
+        return df.join(df[col].apply(lambda x: list_handler(x)).fillna(0).astype(int))
+
+    @staticmethod
+    def list2vector(df, col, ids):
+        def list_handler(ls):
+            return pd.Series({ids[k]: 1 for k in ls if k in ids})
+
+        vectors = df[col].apply(lambda x: list_handler(x)).fillna(0).astype(int)
+        for i in ids.values():
+            if i not in vectors.columns:
+                vectors[i] = 0
+        return vectors[list(range(len(ids)))]
 
 
-data = data.drop(columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
-                          'release_date'])
-print(data)
+
+
+if __name__ == '__main__':
+    file_path = r"C:\Users\YaelBadian\Documents\technion\lab\train.tsv"
+    data = pd.read_csv(file_path, sep="\t")
+    preproccess = Preproccess(data)
+    preproccess.preprocessing(data)
