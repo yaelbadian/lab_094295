@@ -13,7 +13,7 @@ class Preproccess:
         data = Preproccess.extraced_json_columns(train.copy())
         self.languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
         self.top_genres = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
-        self.top_countries = [x[0] for x in Counter(data['production_companies_names'].sum()) if x[1] > 50]
+        self.top_countries = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 50]
 
         self.cnts = {'production_companies_names': Counter(data['production_companies_names'].sum()),
                      'production_countries_names': Counter(data['production_countries_names'].sum()),
@@ -106,21 +106,21 @@ class Preproccess:
     @staticmethod
     def extraced_json_columns(data):
         col = 'genres'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         col = 'belongs_to_collection'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         col = 'production_companies'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         col = 'production_countries'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         # col = 'spoken_languages'
         # data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
         col = 'Keywords'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         col = 'cast'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, False)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         col = 'crew'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x,False, True)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         return data
 
     @staticmethod
