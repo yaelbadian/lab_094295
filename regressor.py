@@ -184,67 +184,11 @@ class Regressor:
     def feature_importances_(self, value):
         self._feature_importances_ = value
 
-    def save_model(self, fname):
+    def save(self, fname):
         with open(fname, 'wb') as file:
-            pickle.dump(self._fitted_model, file)
+            pickle.dump(self, file)
 
-    def load_model(self, fname):
+    @staticmethod
+    def load(fname):
         with open(fname, 'rb') as file:
-            self._fitted_model = pickle.load(file)
-
-    def random_tuning(self, X, y, cv_splits=5, scoring='neg_mean_squared_error', n_jobs=-1, n_iters=100):
-        cv_function, parameters = self._optimize_function(X, y, cv_splits, scoring, n_jobs)
-        scores = []
-        best_score, best_params = -float('inf'), []
-        times = []
-        t1 = time()
-        all_parameters = []
-        for param, ranges in parameters.items():
-            all_parameters.append(uniform(ranges[0], ranges[-1], n_iters))
-        for i in range(n_iters):
-            iter_params = [all_parameters[p][i] for p in range(len(all_parameters))]
-            score = cv_function(*iter_params)
-            if score > best_score:
-                best_score = score
-                best_params = iter_params
-            scores.append(score)
-            times.append(time() - t1)
-        best_params = {param: best_params[i] for i, param in enumerate(parameters)}
-        return scores, times, best_params, best_score, times[-1]
-
-    def greedy_tuning(self, X, y, cv_splits=5, scoring='neg_mean_squared_error', n_jobs=-1, n_iters=100, rounds=3):
-        cv_function, parameters = self._optimize_function(X, y, cv_splits, scoring, n_jobs)
-        bins = int(n_iters / (rounds * len(parameters)))
-        bins = 2 if bins < 2 else bins
-        scores = []
-        best_score, best_params = 0, {param: (ranges[0] + ranges[-1]) / 2 for param, ranges in parameters.items()}
-        times = []
-        t1 = time()
-        for i in range(rounds):
-            for param, ranges in parameters.items():
-                best_param_score = -float('inf')
-                delta = (ranges[-1] - ranges[0]) / (bins - 1)
-                for i in range(bins):
-                    current_params = best_params.copy()
-                    current_params[param] = ranges[0] + i * delta
-                    score = cv_function(*list(current_params.values()))
-                    if score > best_param_score:
-                        best_param_score = score
-                        best_params[param] = current_params[param]
-                        if score > best_score:
-                            best_score = score
-                    scores.append(score)
-                    times.append(time() - t1)
-        return scores, times, best_params, best_score, times[-1]
-
-    def bayesian_tuning(self, X, y, cv_splits=5, scoring='neg_mean_squared_error', n_jobs=-1, n_iters=100):
-        t1 = time()
-        cv_function, parameters = self._optimize_function(X, y, cv_splits, scoring, n_jobs)
-        gp_params = {"alpha": 1e-5, 'init_points':int(0.3 * n_iters), 'n_iter': int(0.7 * n_iters)}
-        bo = BayesianOptimization(cv_function, parameters)
-        bo.maximize(**gp_params)
-        best_params = bo.max["params"]
-        best_score = bo.max["target"]
-        scores = list(bo.space.target)
-        total_time = time() - t1
-        return scores, [total_time/n_iters*i for i in range(n_iters)], best_params, best_score, total_time
+            return pickle.load(file)
