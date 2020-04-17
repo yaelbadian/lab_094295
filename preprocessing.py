@@ -65,7 +65,7 @@ class Preproccess:
 
         data = self.count_instances(data, 'production_companies_names', 1, 3)
         data = self.count_instances(data, 'production_companies_names', 4, 10)
-        data = self.count_instances(data, 'production_companies_names', 0, 10)
+        data = self.count_instances(data, 'production_countries_names', 0, 10)
         data = self.count_instances(data, 'production_countries_names', 11, 50)
         data = self.count_instances(data, 'cast_names', 4, 10000)
 
@@ -75,7 +75,7 @@ class Preproccess:
                                    'month', 'genres_len', 'production_companies_len', 'production_countries_len',
                                    'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len',
                                    'production_companies_names_1-3', 'production_companies_names_4-10',
-                                   'production_companies_names_0-10', 'production_companies_names_11-50',
+                                   'production_countries_names_0-10', 'production_countries_names_11-50',
                                    'cast_names_4-10000']
             self.scaler.fit(data[self.scaler_columns])
 
@@ -87,6 +87,7 @@ class Preproccess:
                      'crew', 'genres_names', 'belongs_to_collection_names', 'belongs_to_collection_len',
                      'production_companies_names', 'production_countries_names', 'Keywords_names', 'cast_names',
                      'crew_names', 'crew_jobs'])
+        return data
 
 
     def count_instances(self, data, col, l, u):
@@ -97,7 +98,6 @@ class Preproccess:
 
     @staticmethod
     def map_to_ids(data, col, threshold=0):
-        # here
         cnt = [x[0] for x in Counter(data[col].apply(lambda x: list(x)).sum()).most_common() if x[1] > threshold]
         return {x: i for i, x in enumerate(cnt)}
 
@@ -176,8 +176,19 @@ class Preproccess:
         return vectors[list(range(len(ids)))]
 
 
+    def save(self, path):
+        with open(path, 'wb') as file:
+            return pickle.dump(self, file)
+
+    @staticmethod
+    def load(path):
+        with open(path, 'rb') as file:
+            return pickle.load(file)
+
+
 if __name__ == '__main__':
     file_path = 'train.tsv'
     data = pd.read_csv(file_path, sep="\t")
     preproccess = Preproccess()
     preproccess.fit_transform(data).to_csv('fitted_train.csv', index=False, sep='\t')
+
