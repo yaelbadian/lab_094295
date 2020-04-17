@@ -5,7 +5,6 @@ import seaborn as sns
 from collections import Counter
 from metric_learn import MLKR
 from sklearn.preprocessing import StandardScaler
-sns.set()
 
 
 class Preproccess:
@@ -19,12 +18,12 @@ class Preproccess:
                      'production_countries_names': Counter(data['production_countries_names'].sum()),
                      'cast_names': Counter(data['cast_names'].sum()),
                      'crew_names': Counter(data['crew_names'].sum())}
-
         self.ids = {}
         self.mlkrs = {}
         Preproccess.create_embedding(self, data, 'production_companies_names', threshold=0, n_components=5)
-        Preproccess.create_embedding(self, data, 'cast_names', threshold=0, n_components=5)
-        Preproccess.create_embedding(self, data, 'crew_names', threshold=0, n_components=5)
+        Preproccess.create_embedding(self, data, 'cast_names', threshold=10, n_components=10)
+        Preproccess.create_embedding(self, data, 'crew_names', threshold=10, n_components=10)
+        Preproccess.create_embedding(self, data, 'crew_jobs', threshold=10, n_components=10)
         Preproccess.create_embedding(self, data, 'Keywords_names', threshold=10, n_components=10)
 
         # self.keywords = Counter(data[''].sum()).most_common()
@@ -75,8 +74,10 @@ class Preproccess:
 
     @staticmethod
     def map_to_ids(df, col, threshold=0):
-        cnt = [x[0] for x in Counter(df[col].sum()).most_common() if x[1] > threshold]
+        # here
+        cnt = [x[0] for x in Counter(df[col].apply(lambda x: list(x)).sum()).most_common() if x[1] > threshold]
         return {x: i for i, x in enumerate(cnt)}
+
 
     def create_embedding(self, data, col, threshold=0, n_components=5):
         self.ids[col] = Preproccess.map_to_ids(data, col, threshold)
@@ -84,13 +85,14 @@ class Preproccess:
         self.mlkrs[col] = MLKR(n_components, verbose=True, max_iter=10)
         self.mlkrs[col].fit(mat, data['revenue'])
 
+
     def embedding(self, data, col):
         mat = Preproccess.list2vector(data, col, self.ids[col])
         return data.join(pd.DataFrame(self.mlkrs[col].transform(mat)).add_prefix(col + '_'))
 
 
     @staticmethod
-    def json_columns_handler(data):
+    def json_columns_handler(data, jobs=False):
         features = {}
         if isinstance(data, str):
             data = eval(data)
@@ -101,6 +103,9 @@ class Preproccess:
         names = [ele.get('name') for ele in data if 'name' in ele]
         n = len(names)
         features.update({'names': names, 'len': n})
+        if jobs:
+            jobs = dict(Counter([ele.get('job') for ele in data if 'job' in ele]))
+            features.update({'jobs': jobs, 'jobs_len': len(jobs)})
         return pd.Series(features)
 
     @staticmethod
@@ -120,12 +125,12 @@ class Preproccess:
         col = 'cast'
         data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
         col = 'crew'
-        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x)).add_prefix(f'{col}_'))
+        data = data.join(data[col].apply(lambda x: Preproccess.json_columns_handler(x, True)).add_prefix(f'{col}_'))
         return data
 
     @staticmethod
     def json2counter(df, col, top=None):
-        values = df[col].apply(lambda x: Preproccess.json_columns_handler(x, False, False))['names'].sum()
+        values = df[col].apply(lambda x: Preproccess.json_columns_handler(x, False))['names'].sum()
         return Counter(values).most_common(top)
 
     @staticmethod
@@ -138,26 +143,16 @@ class Preproccess:
     @staticmethod
     def list2vector(df, col, ids):
         def list_handler(ls):
-            return pd.Series({ids[k]: 1 for k in ls if k in ids})
-
+            # here
+            if isinstance(ls, dict):
+                return pd.Series({ids[k]: v for k, v in ls.items() if k in ids})
+            else:
+                return pd.Series({ids[k]: 1 for k in ls if k in ids})
         vectors = df[col].apply(lambda x: list_handler(x)).fillna(0).astype(int)
         for i in ids.values():
             if i not in vectors.columns:
                 vectors[i] = 0
         return vectors[list(range(len(ids)))]
-
-    def extract_jobs_features(self, data):
-        features = {}
-        if isinstance(data, str):
-            data = eval(data)
-        if isinstance(data, dict):
-            data = [data]
-        elif not isinstance(data, list):
-            data = []
-        jobs_cnt = Counter([ele.get('job') for ele in data if 'job' in ele])
-        features.update({'j:{}'.format(str(k).replace(' ', '_')): v for k, v in jobs_cnt.items()})
-        features.update({'jobs_len': len(jobs_cnt)})
-        return pd.Series(features)
 
 
 if __name__ == '__main__':
