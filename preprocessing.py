@@ -62,7 +62,7 @@ class Preproccess:
 
         data = data.drop(
             columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
-                     'release_date', 'belongs_to_collection', 'genres', 'imdb_id', 'original_language',
+                     'release_date', 'belongs_to_collection', 'genres', 'imdb_id',
                      'production_companies', 'production_countries', 'spoken_languages', 'Keywords', 'cast',
                      'crew', 'genres_names', 'belongs_to_collection_names', 'belongs_to_collection_len',
                      'production_companies_names', 'production_countries_names', 'Keywords_names', 'cast_names',
