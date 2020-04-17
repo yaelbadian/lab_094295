@@ -8,30 +8,30 @@ import pickle
 
 class Preproccess:
     def __init__(self):
-        pass
+        self.languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
+        self.top_genres = []
+        self.top_countries = []
+        self.cnts = {}
+        self.mlkrs = {}
+        self.ids = {}
 
 
     def fit_transform(self, train):
         data = Preproccess.extraced_json_columns(train.copy())
         data['revenue'] = np.log(data['revenue'] + 1)
-
-        self.languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
         self.top_genres = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
-        self.top_countries = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 50]
-
+        self.top_countries = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if
+                              x[1] > 50]
         self.cnts = {'production_companies_names': Counter(data['production_companies_names'].sum()),
                      'production_countries_names': Counter(data['production_countries_names'].sum()),
                      'cast_names': Counter(data['cast_names'].sum()),
                      'crew_names': Counter(data['crew_names'].sum())}
-        self.ids = {}
-        self.mlkrs = {}
         Preproccess.create_embedding(self, data, 'production_companies_names', 'revenue', threshold=0, n_components=5)
         Preproccess.create_embedding(self, data, 'cast_names', 'revenue', threshold=10, n_components=10)
         Preproccess.create_embedding(self, data, 'crew_names', 'revenue', threshold=10, n_components=10)
         Preproccess.create_embedding(self, data, 'crew_jobs', 'revenue', threshold=10, n_components=10)
         Preproccess.create_embedding(self, data, 'Keywords_names', 'revenue', threshold=10, n_components=10)
         return self.transform(data, init=True)
-
 
     def transform(self, data, init=False):
         # original_language
@@ -42,8 +42,6 @@ class Preproccess:
         data['release_date'] = pd.to_datetime(data['release_date'])
         data['year'] = data['release_date'].dt.year
         data['month'] = data['release_date'].dt.month
-
-        data['revenue'] = np.log(data['revenue'] + 1)
         data['no_budget'] = data['budget'] == 0
         data['budget'] = np.log(data['budget'] + 1)
         data['collection'] = data['belongs_to_collection_len'] > 0
@@ -71,7 +69,7 @@ class Preproccess:
 
         if init:
             self.scaler = StandardScaler()
-            self.scaler_columns = ['budget', 'popularity', 'revenue', 'runtime', 'vote_average', 'vote_count', 'year',
+            self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
                                    'month', 'genres_len', 'production_companies_len', 'production_countries_len',
                                    'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len',
                                    'production_companies_names_1-3', 'production_companies_names_4-10',
@@ -89,7 +87,6 @@ class Preproccess:
                      'crew_names', 'crew_jobs'])
         return data
 
-
     def count_instances(self, data, col, l, u):
         counter = self.cnts[col]
         new_col = col + '_' + str(l) + '-' + str(u)
@@ -101,18 +98,15 @@ class Preproccess:
         cnt = [x[0] for x in Counter(data[col].apply(lambda x: list(x)).sum()).most_common() if x[1] > threshold]
         return {x: i for i, x in enumerate(cnt)}
 
-
     def create_embedding(self, data, col, target_col, threshold=0, n_components=5):
         self.ids[col] = Preproccess.map_to_ids(data, col, threshold)
         mat = Preproccess.list2vector(data, col, self.ids[col])
         self.mlkrs[col] = MLKR(n_components, verbose=True, max_iter=10)
         self.mlkrs[col].fit(mat, data[target_col])
 
-
     def embedding(self, data, col):
         mat = Preproccess.list2vector(data, col, self.ids[col])
         return data.join(pd.DataFrame(self.mlkrs[col].transform(mat)).add_prefix(col + '_'))
-
 
     @staticmethod
     def json_columns_handler(data, jobs=False):
@@ -169,12 +163,12 @@ class Preproccess:
                 return pd.Series({ids[k]: v for k, v in ls.items() if k in ids})
             else:
                 return pd.Series({ids[k]: 1 for k in ls if k in ids})
+
         vectors = data[col].apply(lambda x: list_handler(x)).fillna(0).astype(int)
         for i in ids.values():
             if i not in vectors.columns:
                 vectors[i] = 0
         return vectors[list(range(len(ids)))]
-
 
     def save(self, path):
         with open(path, 'wb') as file:
@@ -191,4 +185,3 @@ if __name__ == '__main__':
     data = pd.read_csv(file_path, sep="\t")
     preproccess = Preproccess()
     preproccess.fit_transform(data).to_csv('fitted_train.csv', index=False, sep='\t')
-
