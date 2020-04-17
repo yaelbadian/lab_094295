@@ -12,8 +12,10 @@ class Preproccess:
         self.top_genres = []
         self.top_countries = []
         self.cnts = {}
-        self.mlkrs = {}
+        self.scaler = None
+        self.scaler_columns = []
         self.ids = {}
+        self.mlkrs = {}
 
 
     def fit_transform(self, train):
@@ -55,11 +57,11 @@ class Preproccess:
         data = Preproccess.list2binary(data, 'genres_names', self.top_genres)
         data = Preproccess.list2binary(data, 'production_countries_names', self.top_countries)
 
-        data = Preproccess.embedding(self, data, 'production_companies_names')
-        data = Preproccess.embedding(self, data, 'cast_names')
-        data = Preproccess.embedding(self, data, 'crew_names')
-        data = Preproccess.embedding(self, data, 'Keywords_names')
-        data = Preproccess.embedding(self, data, 'crew_jobs')
+        data = self.embedding(data, 'production_companies_names')
+        data = self.embedding(data, 'cast_names')
+        data = self.embedding(data, 'crew_names')
+        data = self.embedding(data, 'Keywords_names')
+        data = self.embedding(data, 'crew_jobs')
 
         data = self.count_instances(data, 'production_companies_names', 1, 3)
         data = self.count_instances(data, 'production_companies_names', 4, 10)
