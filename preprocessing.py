@@ -41,30 +41,34 @@ class Preproccess:
         data = Preproccess.embedding(self, data, 'cast_names')
         data = Preproccess.embedding(self, data, 'crew_names')
         data = Preproccess.embedding(self, data, 'Keywords_names')
+        data = Preproccess.embedding(self, data, 'crew_jobs')
 
-        # # original_language
-        #
-        # data.loc[data['original_language'].isin(self.languages) == False, 'original_language'] = 'other'
-        # data = pd.get_dummies(data, columns=['original_language'])
-        #
-        # # release_date
-        # data['release_date'] = pd.to_datetime(data['release_date'])
-        # data['year'] = data['release_date'].dt.year
-        # data['month'] = data['release_date'].dt.month
-        #
-        # data['revenue'] = np.log(data['revenue'] + 1)
-        # data['no_budget'] = data['budget'] == 0
-        # data['budget'] = np.log(data['budget'] + 1)
-        # data['is_collection'] = data['belongs_to_collection_len'] > 0
-        # data['homepage'] = data['homepage'].notna()
-        # data['poster_path'] = data['poster_path'].notna()
-        # data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
-        #
+        # original_language
+        data.loc[data['original_language'].isin(self.languages) == False, 'original_language'] = 'other'
+        data = pd.get_dummies(data, columns=['original_language'])
+
+        # release_date
+        data['release_date'] = pd.to_datetime(data['release_date'])
+        data['year'] = data['release_date'].dt.year
+        data['month'] = data['release_date'].dt.month
+
+        data['revenue'] = np.log(data['revenue'] + 1)
+        data['no_budget'] = data['budget'] == 0
+        data['budget'] = np.log(data['budget'] + 1)
+        data['collection'] = data['belongs_to_collection_len'] > 0
+        data['homepage'] = data['homepage'].notna()
+        data['poster_path'] = data['poster_path'].notna()
+        data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
+
         data = data.drop(
             columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
-                     'release_date'])
+                     'release_date', 'belongs_to_collection', 'genres', 'imdb_id', 'original_language',
+                     'production_companies', 'production_countries', 'spoken_languages', 'Keywords', 'cast',
+                     'crew', 'genres_names', 'belongs_to_collection_names', 'belongs_to_collection_len',
+                     'production_companies_names', 'production_countries_names', 'Keywords_names', 'cast_names',
+                     'crew_names', 'crew_jobs'])
 
-        print(data.columns)
+        data.to_csv('data.csv', sep='\t', index=False)
 
     def count_instances(self, data, col, l, u):
         counter = self.cnts[col]
