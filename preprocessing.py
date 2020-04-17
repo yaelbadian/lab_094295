@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 
 class Preproccess:
     def __init__(self, train):
+        self.scaler = StandardScaler()
         data = Preproccess.extraced_json_columns(train.copy())
         self.languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
         self.top_genres = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
@@ -29,20 +30,6 @@ class Preproccess:
         # self.keywords = Counter(data[''].sum()).most_common()
 
     def preprocessing(self, data):
-        data = Preproccess.extraced_json_columns(data)
-        data = Preproccess.list2binary(data, 'genres_names', self.top_genres)
-        data = self.count_instances(data, 'production_companies_names', 1, 3)
-        data = self.count_instances(data, 'production_companies_names', 4, 10)
-        data = Preproccess.embedding(self, data, 'production_companies_names')
-        data = self.count_instances(data, 'production_countries_names', 0, 10)
-        data = self.count_instances(data, 'production_countries_names', 11, 50)
-        data = Preproccess.list2binary(data, 'production_countries_names', self.top_countries)
-        data = self.count_instances(data, 'cast_names', 4, 10000)
-        data = Preproccess.embedding(self, data, 'cast_names')
-        data = Preproccess.embedding(self, data, 'crew_names')
-        data = Preproccess.embedding(self, data, 'Keywords_names')
-        data = Preproccess.embedding(self, data, 'crew_jobs')
-
         # original_language
         data.loc[data['original_language'].isin(self.languages) == False, 'original_language'] = 'other'
         data = pd.get_dummies(data, columns=['original_language'])
@@ -59,6 +46,20 @@ class Preproccess:
         data['homepage'] = data['homepage'].notna()
         data['poster_path'] = data['poster_path'].notna()
         data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
+
+        data = Preproccess.extraced_json_columns(data)
+        data = Preproccess.list2binary(data, 'genres_names', self.top_genres)
+        data = self.count_instances(data, 'production_companies_names', 1, 3)
+        data = self.count_instances(data, 'production_companies_names', 4, 10)
+        data = Preproccess.embedding(self, data, 'production_companies_names')
+        data = self.count_instances(data, 'production_countries_names', 0, 10)
+        data = self.count_instances(data, 'production_countries_names', 11, 50)
+        data = Preproccess.list2binary(data, 'production_countries_names', self.top_countries)
+        data = self.count_instances(data, 'cast_names', 4, 10000)
+        data = Preproccess.embedding(self, data, 'cast_names')
+        data = Preproccess.embedding(self, data, 'crew_names')
+        data = Preproccess.embedding(self, data, 'Keywords_names')
+        data = Preproccess.embedding(self, data, 'crew_jobs')
 
         data = data.drop(
             columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
@@ -78,7 +79,6 @@ class Preproccess:
 
     @staticmethod
     def map_to_ids(df, col, threshold=0):
-        # here
         cnt = [x[0] for x in Counter(df[col].apply(lambda x: list(x)).sum()).most_common() if x[1] > threshold]
         return {x: i for i, x in enumerate(cnt)}
 
