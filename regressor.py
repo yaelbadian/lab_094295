@@ -1,12 +1,9 @@
 from bayes_opt import BayesianOptimization
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Lasso, LinearRegression
-from sklearn.model_selection import cross_val_score, train_test_split
-from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import cross_val_score
 from xgboost import XGBRegressor
 import pickle
-from time import time
-from numpy.random import uniform
 import seaborn as sns
 sns.set()
 

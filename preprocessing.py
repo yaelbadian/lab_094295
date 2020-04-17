@@ -8,9 +8,7 @@ import pickle
 
 class Preprocess:
     def __init__(self):
-        self.languages = ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']
-        self.top_genres = []
-        self.top_countries = []
+        self.tops = {'original_language': ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']}
         self.cnts = {}
         self.scaler = None
         self.scaler_columns = []
@@ -21,18 +19,25 @@ class Preprocess:
     def fit_transform(self, train):
         data = Preprocess.extraced_json_columns(train.copy())
         data['revenue'] = np.log(data['revenue'] + 1)
-        self.top_genres = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
-        self.top_countries = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if
-                              x[1] > 50]
+        self.tops['genres_names'] = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
+        self.tops['production_countries_names'] = [x[0] for x in Counter(data['production_countries_names'].sum()).most_common() if x[1] > 50]
+        self.tops['production_companies_names'] = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 10]
+        self.tops['cast_names'] = [x[0] for x in Counter(data['cast_names'].sum()).most_common() if x[1] > 10]
+        self.tops['crew_names'] = [x[0] for x in Counter(data['crew_names'].sum()).most_common() if x[1] > 10]
+        self.tops['Keywords_names'] = [x[0] for x in Counter(data['Keywords_names'].sum()).most_common() if x[1] > 10]
+        self.tops['crew_jobs'] = [x[0] for x in Counter(data['crew_jobs'].sum()).most_common() if x[1] > 10]
+
+
         self.cnts = {'production_companies_names': Counter(data['production_companies_names'].sum()),
                      'production_countries_names': Counter(data['production_countries_names'].sum()),
                      'cast_names': Counter(data['cast_names'].sum()),
                      'crew_names': Counter(data['crew_names'].sum())}
-        Preprocess.create_embedding(self, data, 'production_companies_names', 'revenue', threshold=0, n_components=5)
-        Preprocess.create_embedding(self, data, 'cast_names', 'revenue', threshold=10, n_components=10)
-        Preprocess.create_embedding(self, data, 'crew_names', 'revenue', threshold=10, n_components=10)
-        Preprocess.create_embedding(self, data, 'crew_jobs', 'revenue', threshold=10, n_components=10)
-        Preprocess.create_embedding(self, data, 'Keywords_names', 'revenue', threshold=10, n_components=10)
+
+        # Preprocess.create_embedding(self, data, 'production_companies_names', 'revenue', threshold=0, n_components=5)
+        # Preprocess.create_embedding(self, data, 'cast_names', 'revenue', threshold=10, n_components=10)
+        # Preprocess.create_embedding(self, data, 'crew_names', 'revenue', threshold=10, n_components=10)
+        # Preprocess.create_embedding(self, data, 'crew_jobs', 'revenue', threshold=10, n_components=10)
+        # Preprocess.create_embedding(self, data, 'Keywords_names', 'revenue', threshold=10, n_components=10)
         return self.transform(data, init=True)
 
     def transform(self, data, init=False):
@@ -40,7 +45,7 @@ class Preprocess:
             data = Preprocess.extraced_json_columns(data)
 
         # original_language
-        data.loc[data['original_language'].isin(self.languages) == False, 'original_language'] = 'other'
+        data.loc[data['original_language'].isin(self.tops['original_language']) == False, 'original_language'] = 'other'
         data = pd.get_dummies(data, columns=['original_language'])
 
         # release_date
@@ -54,14 +59,19 @@ class Preprocess:
         data['poster_path'] = data['poster_path'].notna()
         data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
 
-        data = Preprocess.list2binary(data, 'genres_names', self.top_genres)
-        data = Preprocess.list2binary(data, 'production_countries_names', self.top_countries)
+        data = self.list2binary(data, 'genres_names')
+        data = self.list2binary(data, 'production_countries_names')
+        data = self.list2binary(data, 'production_companies_names')
+        data = self.list2binary(data, 'cast_names')
+        data = self.list2binary(data, 'crew_names')
+        data = self.list2binary(data, 'Keywords_names')
+        data = self.list2binary(data, 'crew_jobs')
 
-        data = self.embedding(data, 'production_companies_names')
-        data = self.embedding(data, 'cast_names')
-        data = self.embedding(data, 'crew_names')
-        data = self.embedding(data, 'Keywords_names')
-        data = self.embedding(data, 'crew_jobs')
+        # data = self.embedding(data, 'production_companies_names')
+        # data = self.embedding(data, 'cast_names')
+        # data = self.embedding(data, 'crew_names')
+        # data = self.embedding(data, 'Keywords_names')
+        # data = self.embedding(data, 'crew_jobs')
 
         data = self.count_instances(data, 'production_companies_names', 1, 3)
         data = self.count_instances(data, 'production_companies_names', 4, 10)
@@ -103,7 +113,7 @@ class Preprocess:
     def create_embedding(self, data, col, target_col, threshold=0, n_components=5):
         self.ids[col] = Preprocess.map_to_ids(data, col, threshold)
         mat = Preprocess.list2vector(data, col, self.ids[col])
-        self.mlkrs[col] = MLKR(n_components, verbose=True, max_iter=10)
+        self.mlkrs[col] = MLKR(n_components, verbose=True, max_iter=1000)
         self.mlkrs[col].fit(mat, data[target_col])
 
     def embedding(self, data, col):
@@ -150,11 +160,9 @@ class Preprocess:
         values = data[col].apply(lambda x: Preprocess.json_columns_handler(x, False))['names'].sum()
         return Counter(values).most_common(top)
 
-    @staticmethod
-    def list2binary(data, col, cnt):
+    def list2binary(self, data, col):
         def list_handler(ls):
-            return pd.Series({'{}_{}'.format(col, str(k).replace(' ', '_')): 1 for k in ls if k in cnt})
-
+            return pd.Series({'{}_{}'.format(col, str(k).replace(' ', '_')): 1 for k in ls if k in self.tops[col]})
         return data.join(data[col].apply(lambda x: list_handler(x)).fillna(0).astype(int))
 
     @staticmethod
