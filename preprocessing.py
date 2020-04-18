@@ -21,11 +21,11 @@ class Preprocess:
         data['revenue'] = np.log(data['revenue'] + 1)
         self.tops['genres_names'] = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
         self.tops['production_countries_names'] = [x[0] for x in Counter(data['production_countries_names'].sum()).most_common() if x[1] > 50]
-        self.tops['production_companies_names'] = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 10]
-        self.tops['cast_names'] = [x[0] for x in Counter(data['cast_names'].sum()).most_common() if x[1] > 10]
-        self.tops['crew_names'] = [x[0] for x in Counter(data['crew_names'].sum()).most_common() if x[1] > 10]
-        self.tops['Keywords_names'] = [x[0] for x in Counter(data['Keywords_names'].sum()).most_common() if x[1] > 10]
-        self.tops['crew_jobs'] = [x[0] for x in Counter(data['crew_jobs'].sum()).most_common() if x[1] > 10]
+        self.tops['production_companies_names'] = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 35]
+        self.tops['cast_names'] = [x[0] for x in Counter(data['cast_names'].sum()).most_common() if x[1] > 35]
+        self.tops['crew_names'] = [x[0] for x in Counter(data['crew_names'].sum()).most_common() if x[1] > 35]
+        self.tops['Keywords_names'] = [x[0] for x in Counter(data['Keywords_names'].sum()).most_common() if x[1] > 35]
+        self.tops['crew_jobs'] = [x[0] for x in Counter(data['crew_jobs'].apply(lambda x: list(x)).sum()).most_common() if x[1] > 35]
 
 
         self.cnts = {'production_companies_names': Counter(data['production_companies_names'].sum()),
