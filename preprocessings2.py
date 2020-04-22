@@ -8,9 +8,10 @@ import pickle
 
 
 class Preprocess:
-    def __init__(self):
+    def __init__(self, scale):
         self.tops = {'original_language': ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']}
         self.cnts = {}
+        self.scale = scale
         self.scaler = None
         self.scaler_columns = []
         self.ids = {}
@@ -89,19 +90,21 @@ class Preprocess:
         data = self.count_instances(data, 'production_countries_names', 11, 50)
         data = self.count_instances(data, 'cast_names', 4, 10000)
 
-        if init:
-            self.scaler = StandardScaler()
-            self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
-                                   'month', 'genres_len', 'production_companies_len', 'production_countries_len',
-                                   'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len', 'budget_to_popularity',
-                                   'budget_to_runtime', 'budget_year_ratio', 'release_year_popularity_ratio',
-                                   'release_year_popularity_ratio2',
-                                   'production_companies_names_1-3', 'production_companies_names_4-10',
-                                   'production_countries_names_0-10', 'production_countries_names_11-50',
-                                   'cast_names_4-10000']
-            self.scaler.fit(data[self.scaler_columns])
+        if self.scale:
+            if init:
+                self.scaler = StandardScaler()
+                self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
+                                       'month', 'genres_len', 'production_companies_len', 'production_countries_len',
+                                       'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len', 'budget_to_popularity',
+                                       'budget_to_runtime', 'budget_year_ratio', 'release_year_popularity_ratio',
+                                       'release_year_popularity_ratio2',
+                                       'production_companies_names_1-3', 'production_companies_names_4-10',
+                                       'production_countries_names_0-10', 'production_countries_names_11-50',
+                                       'cast_names_4-10000']
+                self.scaler.fit(data[self.scaler_columns])
 
-        data[self.scaler_columns] = self.scaler.transform(data[self.scaler_columns])
+            data[self.scaler_columns] = self.scaler.transform(data[self.scaler_columns])
+
         data = data.drop(
             columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
                      'release_date', 'belongs_to_collection', 'genres', 'imdb_id',
