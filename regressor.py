@@ -64,8 +64,8 @@ class Regressor:
             return cross_val_score(Regressor._init_RandomForestRegressor(params), X=X, y=y, cv=cv_splits,
                                    scoring=scoring, n_jobs=n_jobs).mean()
 
-        parameters = {"n_estimators": (10, 100),
-                      "max_depth": (5, 100),
+        parameters = {"n_estimators": (10, 80),
+                      "max_depth": (5, 40),
                       "min_samples_split": (2, 100),
                       "min_samples_leaf": (2, 50)}
         return cv_function, parameters
@@ -94,9 +94,9 @@ class Regressor:
 
         parameters = {"eta": (0.001, 0.4),
                       "gamma": (0, 15),
-                      "max_depth": (1, 75),
-                      "n_estimators": (1, 150),
-                      "min_child_weight": (1, 20)}
+                      "max_depth": (1, 40),
+                      "n_estimators": (1, 80),
+                      "min_child_weight": (1, 40)}
         return cv_function, parameters
 
     # ----- lasso ----- #

@@ -3,6 +3,7 @@ import numpy as np
 from collections import Counter
 from metric_learn import MLKR
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 import pickle
 
 
@@ -22,11 +23,11 @@ class Preprocess:
         data['revenue'] = np.log(data['revenue'] + 1)
         self.tops['genres_names'] = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
         self.tops['production_countries_names'] = [x[0] for x in Counter(data['production_countries_names'].sum()).most_common() if x[1] > 50]
-        self.tops['production_companies_names'] = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 35]
-        self.tops['cast_names'] = [x[0] for x in Counter(data['cast_names'].sum()).most_common() if x[1] > 35]
-        self.tops['crew_names'] = [x[0] for x in Counter(data['crew_names'].sum()).most_common() if x[1] > 35]
-        self.tops['Keywords_names'] = [x[0] for x in Counter(data['Keywords_names'].sum()).most_common() if x[1] > 35]
-        self.tops['crew_jobs'] = [x[0] for x in Counter(data['crew_jobs'].apply(lambda x: list(x)).sum()).most_common() if x[1] > 35]
+        self.tops['production_companies_names'] = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 10]
+        self.tops['cast_names'] = [x[0] for x in Counter(data['cast_names'].sum()).most_common() if x[1] > 10]
+        self.tops['crew_names'] = [x[0] for x in Counter(data['crew_names'].sum()).most_common() if x[1] > 10]
+        self.tops['Keywords_names'] = [x[0] for x in Counter(data['Keywords_names'].sum()).most_common() if x[1] > 10]
+        self.tops['crew_jobs'] = [x[0] for x in Counter(data['crew_jobs'].apply(lambda x: list(x)).sum()).most_common() if x[1] > 10]
 
 
         self.cnts = {'production_companies_names': Counter(data['production_companies_names'].sum()),
@@ -34,12 +35,14 @@ class Preprocess:
                      'cast_names': Counter(data['cast_names'].sum()),
                      'crew_names': Counter(data['crew_names'].sum())}
 
-        # Preprocess.create_embedding(self, data, 'production_companies_names', 'revenue', threshold=0, n_components=5)
-        # Preprocess.create_embedding(self, data, 'cast_names', 'revenue', threshold=10, n_components=10)
-        # Preprocess.create_embedding(self, data, 'crew_names', 'revenue', threshold=10, n_components=10)
-        # Preprocess.create_embedding(self, data, 'crew_jobs', 'revenue', threshold=10, n_components=10)
-        # Preprocess.create_embedding(self, data, 'Keywords_names', 'revenue', threshold=10, n_components=10)
-        return self.transform(data, init=True)
+        embed_data, train_data = train_test_split(data, test_size=0.6)
+
+        self.create_embedding(data, embed_data, 'production_companies_names', 'revenue', threshold=7, n_components=5)
+        self.create_embedding(data, embed_data, 'cast_names', 'revenue', threshold=10, n_components=10)
+        self.create_embedding(data, embed_data, 'crew_names', 'revenue', threshold=10, n_components=10)
+        self.create_embedding(data, embed_data, 'crew_jobs', 'revenue', threshold=10, n_components=10)
+        self.create_embedding(data, embed_data, 'Keywords_names', 'revenue', threshold=10, n_components=10)
+        return self.transform(train_data, init=True)
 
     def transform(self, data, init=False):
         if not init:
@@ -59,20 +62,26 @@ class Preprocess:
         data['homepage'] = data['homepage'].notna()
         data['poster_path'] = data['poster_path'].notna()
         data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
+        data['budget_to_popularity'] = data['budget'] / data['popularity']
+        data['budget_to_runtime'] = data['budget'] / data['runtime']
+        data['budget_year_ratio'] = data['budget'] / (data['year'] * data['year'])
+        data['release_year_popularity_ratio'] = data['year'] / data['popularity']
+        data['release_year_popularity_ratio2'] = data['popularity'] / data['year']
+
 
         data = self.list2binary(data, 'genres_names')
         data = self.list2binary(data, 'production_countries_names')
         data = self.list2binary(data, 'production_companies_names')
-        data = self.list2binary(data, 'cast_names')
-        data = self.list2binary(data, 'crew_names')
-        data = self.list2binary(data, 'Keywords_names')
-        data = self.list2binary(data, 'crew_jobs')
+        # data = self.list2binary(data, 'cast_names')
+        # data = self.list2binary(data, 'crew_names')
+        # data = self.list2binary(data, 'Keywords_names')
+        # data = self.list2binary(data, 'crew_jobs')
 
-        # data = self.embedding(data, 'production_companies_names')
-        # data = self.embedding(data, 'cast_names')
-        # data = self.embedding(data, 'crew_names')
-        # data = self.embedding(data, 'Keywords_names')
-        # data = self.embedding(data, 'crew_jobs')
+        data = self.embedding(data, 'production_companies_names')
+        data = self.embedding(data, 'cast_names')
+        data = self.embedding(data, 'crew_names')
+        data = self.embedding(data, 'Keywords_names')
+        data = self.embedding(data, 'crew_jobs')
 
         data = self.count_instances(data, 'production_companies_names', 1, 3)
         data = self.count_instances(data, 'production_companies_names', 4, 10)
@@ -84,7 +93,9 @@ class Preprocess:
             self.scaler = StandardScaler()
             self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
                                    'month', 'genres_len', 'production_companies_len', 'production_countries_len',
-                                   'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len',
+                                   'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len', 'budget_to_popularity',
+                                   'budget_to_runtime', 'budget_year_ratio', 'release_year_popularity_ratio',
+                                   'release_year_popularity_ratio2',
                                    'production_companies_names_1-3', 'production_companies_names_4-10',
                                    'production_countries_names_0-10', 'production_countries_names_11-50',
                                    'cast_names_4-10000']
@@ -107,7 +118,6 @@ class Preprocess:
                     data[col] = 0
         return data[self.features].replace([np.inf, -np.inf], 0).fillna(0)
 
-
     def count_instances(self, data, col, l, u):
         counter = self.cnts[col]
         new_col = col + '_' + str(l) + '-' + str(u)
@@ -119,11 +129,11 @@ class Preprocess:
         cnt = [x[0] for x in Counter(data[col].apply(lambda x: list(x)).sum()).most_common() if x[1] > threshold]
         return {x: i for i, x in enumerate(cnt)}
 
-    def create_embedding(self, data, col, target_col, threshold=0, n_components=5):
+    def create_embedding(self, data, embed_data, col, target_col, threshold=0, n_components=5):
         self.ids[col] = Preprocess.map_to_ids(data, col, threshold)
-        mat = self.list2vector(data, col)
+        mat = self.list2vector(embed_data, col)
         self.mlkrs[col] = MLKR(n_components, verbose=True, max_iter=1000)
-        self.mlkrs[col].fit(mat, data[target_col])
+        self.mlkrs[col].fit(mat, embed_data[target_col])
 
     def embedding(self, data, col):
         mat = self.list2vector(data, col)
@@ -169,10 +179,10 @@ class Preprocess:
         values = data[col].apply(lambda x: Preprocess.json_columns_handler(x, False))['names'].sum()
         return Counter(values).most_common(top)
 
-
     def list2binary(self, data, col):
         def list_handler(ls):
-            return pd.Series({'{}_{}'.format(col, str(k).replace(' ', '_')): 1 if k in ls else 0 for k in self.tops[col]})
+            return pd.Series({'{}_{}'.format(col, str(k).replace(' ', '_')): 1 if k in ls else 0
+                                                                            for k in self.tops[col]})
         return data.join(data[col].apply(lambda x: list_handler(x)).fillna(0).astype(int))
 
     def list2vector(self, data, col):
@@ -196,4 +206,3 @@ class Preprocess:
     def load(path):
         with open(path, 'rb') as file:
             return pickle.load(file)
-
