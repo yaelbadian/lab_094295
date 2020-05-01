@@ -46,6 +46,7 @@ class Preprocess:
         return self.transform(train_data, init=True)
 
     def transform(self, data, init=False):
+        data = data.copy()
         if not init:
             data = Preprocess.extraced_json_columns(data)
 
@@ -63,11 +64,17 @@ class Preprocess:
         data['homepage'] = data['homepage'].notna()
         data['poster_path'] = data['poster_path'].notna()
         data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
-        data['budget_to_popularity'] = data['budget'] / data['popularity']
-        data['budget_to_runtime'] = data['budget'] / data['runtime']
-        data['budget_year_ratio'] = data['budget'] / (data['year'] * data['year'])
-        data['release_year_popularity_ratio'] = data['year'] / data['popularity']
-        data['release_year_popularity_ratio2'] = data['popularity'] / data['year']
+        data['budget_to_popularity'] = data['budget'] / (data['popularity'] + 1)
+        data['budget_to_runtime'] = data['budget'] / (data['runtime'] + 1)
+        data['budget_year_ratio'] = data['budget'] / (data['year'] - 1900)**2
+        data['year_popularity_ratio'] = data['year'] / (data['popularity'] + 1)
+        data['year_popularity_ratio2'] = data['popularity'] / data['year']
+        data['year_to_budget'] = data['year'] / (data['budget'] + 1)
+        data['budget_to_runtime_to_year'] = data['budget_to_runtime'] / data['year']
+        data['budget_to_vote_count'] = data['budget'] / (data['vote_count'] + 1)
+        data['vote_count_to_budget'] = data['vote_count'] / (data['budget'] + 1)
+        data['vote_count_to_year'] = data['vote_count'] / (data['year'] - 1900)
+        data['budget_to_vote_count_to_year'] = data['budget'] / (data['vote_count_to_year'] + 1)
 
 
         data = self.list2binary(data, 'genres_names')
@@ -96,11 +103,12 @@ class Preprocess:
                 self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
                                        'month', 'genres_len', 'production_companies_len', 'production_countries_len',
                                        'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len', 'budget_to_popularity',
-                                       'budget_to_runtime', 'budget_year_ratio', 'release_year_popularity_ratio',
-                                       'release_year_popularity_ratio2',
-                                       'production_companies_names_1-3', 'production_companies_names_4-10',
-                                       'production_countries_names_0-10', 'production_countries_names_11-50',
-                                       'cast_names_4-10000']
+                                       'budget_to_runtime', 'budget_year_ratio', 'year_popularity_ratio',
+                                       'year_popularity_ratio2', 'year_to_budget', 'budget_to_runtime_to_year',
+                                       'budget_to_vote_count', 'vote_count_to_budget', 'vote_count_to_year',
+                                       'budget_to_vote_count_to_year', 'production_companies_names_1-3',
+                                       'production_companies_names_4-10', 'production_countries_names_0-10',
+                                       'production_countries_names_11-50', 'cast_names_4-10000']
                 self.scaler.fit(data[self.scaler_columns])
 
             data[self.scaler_columns] = self.scaler.transform(data[self.scaler_columns])
@@ -115,6 +123,9 @@ class Preprocess:
         if init:
             data = data.reindex(sorted(data.columns), axis=1)
             self.features = data.columns.tolist()
+            if 'revenue' in self.features:
+                self.features.remove('revenue')
+                return data[self.features + ['revenue']].replace([np.inf, -np.inf], 0).fillna(0)
         else:
             for col in self.features:
                 if col not in data.columns:

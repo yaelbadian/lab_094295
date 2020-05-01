@@ -7,9 +7,10 @@ import pickle
 
 
 class Preprocess:
-    def __init__(self):
+    def __init__(self, scale):
         self.tops = {'original_language': ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']}
         self.cnts = {}
+        self.scale = scale
         self.scaler = None
         self.scaler_columns = []
         self.ids = {}
@@ -21,12 +22,12 @@ class Preprocess:
         data = Preprocess.extraced_json_columns(train.copy())
         data['revenue'] = np.log(data['revenue'] + 1)
         self.tops['genres_names'] = [x[0] for x in Counter(data['genres_names'].sum()).most_common()]
-        self.tops['production_countries_names'] = [x[0] for x in Counter(data['production_countries_names'].sum()).most_common() if x[1] > 50]
-        self.tops['production_companies_names'] = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 35]
-        self.tops['cast_names'] = [x[0] for x in Counter(data['cast_names'].sum()).most_common() if x[1] > 35]
-        self.tops['crew_names'] = [x[0] for x in Counter(data['crew_names'].sum()).most_common() if x[1] > 35]
-        self.tops['Keywords_names'] = [x[0] for x in Counter(data['Keywords_names'].sum()).most_common() if x[1] > 35]
-        self.tops['crew_jobs'] = [x[0] for x in Counter(data['crew_jobs'].apply(lambda x: list(x)).sum()).most_common() if x[1] > 35]
+        self.tops['production_countries_names'] = [x[0] for x in Counter(data['production_countries_names'].sum()).most_common() if x[1] > 45]
+        self.tops['production_companies_names'] = [x[0] for x in Counter(data['production_companies_names'].sum()).most_common() if x[1] > 30]
+        self.tops['cast_names'] = [x[0] for x in Counter(data['cast_names'].sum()).most_common() if x[1] > 30]
+        self.tops['crew_names'] = [x[0] for x in Counter(data['crew_names'].sum()).most_common() if x[1] > 30]
+        self.tops['Keywords_names'] = [x[0] for x in Counter(data['Keywords_names'].sum()).most_common() if x[1] > 30]
+        self.tops['crew_jobs'] = [x[0] for x in Counter(data['crew_jobs'].apply(lambda x: list(x)).sum()).most_common() if x[1] > 30]
 
 
         self.cnts = {'production_companies_names': Counter(data['production_companies_names'].sum()),
@@ -42,6 +43,7 @@ class Preprocess:
         return self.transform(data, init=True)
 
     def transform(self, data, init=False):
+        data = data.copy()
         if not init:
             data = Preprocess.extraced_json_columns(data)
 
@@ -59,6 +61,18 @@ class Preprocess:
         data['homepage'] = data['homepage'].notna()
         data['poster_path'] = data['poster_path'].notna()
         data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
+        data['budget_to_popularity'] = data['budget'] / (data['popularity'] + 1)
+        data['budget_to_runtime'] = data['budget'] / (data['runtime'] + 1)
+        data['budget_year_ratio'] = data['budget'] / (data['year'] - 1900)**2
+        data['year_popularity_ratio'] = data['year'] / (data['popularity'] + 1)
+        data['year_popularity_ratio2'] = data['popularity'] / data['year']
+        data['year_to_budget'] = data['year'] / (data['budget'] + 1)
+        data['budget_to_runtime_to_year'] = data['budget_to_runtime'] / data['year']
+        data['budget_to_vote_count'] = data['budget'] / (data['vote_count'] + 1)
+        data['vote_count_to_budget'] = data['vote_count'] / (data['budget'] + 1)
+        data['vote_count_to_year'] = data['vote_count'] / (data['year'] - 1900)
+        data['budget_to_vote_count_to_year'] = data['budget'] / (data['vote_count_to_year'] + 1)
+
 
         data = self.list2binary(data, 'genres_names')
         data = self.list2binary(data, 'production_countries_names')
@@ -80,17 +94,22 @@ class Preprocess:
         data = self.count_instances(data, 'production_countries_names', 11, 50)
         data = self.count_instances(data, 'cast_names', 4, 10000)
 
-        if init:
-            self.scaler = StandardScaler()
-            self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
-                                   'month', 'genres_len', 'production_companies_len', 'production_countries_len',
-                                   'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len',
-                                   'production_companies_names_1-3', 'production_companies_names_4-10',
-                                   'production_countries_names_0-10', 'production_countries_names_11-50',
-                                   'cast_names_4-10000']
-            self.scaler.fit(data[self.scaler_columns])
+        if self.scale:
+            if init:
+                self.scaler = StandardScaler()
+                self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
+                                       'month', 'genres_len', 'production_companies_len', 'production_countries_len',
+                                       'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len', 'budget_to_popularity',
+                                       'budget_to_runtime', 'budget_year_ratio', 'year_popularity_ratio',
+                                       'year_popularity_ratio2', 'year_to_budget', 'budget_to_runtime_to_year',
+                                       'budget_to_vote_count', 'vote_count_to_budget', 'vote_count_to_year',
+                                       'budget_to_vote_count_to_year', 'production_companies_names_1-3',
+                                       'production_companies_names_4-10', 'production_countries_names_0-10',
+                                       'production_countries_names_11-50', 'cast_names_4-10000']
+                self.scaler.fit(data[self.scaler_columns])
 
-        data[self.scaler_columns] = self.scaler.transform(data[self.scaler_columns])
+            data[self.scaler_columns] = self.scaler.transform(data[self.scaler_columns])
+
         data = data.drop(
             columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
                      'release_date', 'belongs_to_collection', 'genres', 'imdb_id',
@@ -101,6 +120,9 @@ class Preprocess:
         if init:
             data = data.reindex(sorted(data.columns), axis=1)
             self.features = data.columns.tolist()
+            if 'revenue' in self.features:
+                self.features.remove('revenue')
+                return data[self.features + ['revenue']].replace([np.inf, -np.inf], 0).fillna(0)
         else:
             for col in self.features:
                 if col not in data.columns:
