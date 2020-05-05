@@ -68,11 +68,11 @@ def fit_regressor_final(train, drop_cols, file_name):
     X_train = train.drop(columns=['revenue'] + drop_cols)
     interaction_columns = [c for c in train.columns if 'interaction' in c]
     ratio_columns = [c for c in train.columns if 'ratio' in c]
-    best_score, best_reg = None, None
+    best_score, best_reg, best_reg_str = None, None, ''
     for i, drop_this_columns in enumerate([[], interaction_columns, ratio_columns, interaction_columns + ratio_columns]):
         print(file_name)
         print(i, 'DROPING: ', drop_this_columns)
-        reg = Regressor('xgboost', 50, 20)
+        reg = Regressor('xgboost', 50, 25)
         reg.fit(X_train.drop(columns=[c for c in X_train.columns if c in drop_this_columns]), y_train)
         reg.save(file_name + f'_{i}.pkl')
         features_scores = list(zip(reg.x_columns, reg.feature_importances_))
@@ -84,12 +84,13 @@ def fit_regressor_final(train, drop_cols, file_name):
         print("MSE CV: ", reg_cv_score)
         print("MSE train: ", mse_train)
         with open('results_file.txt', 'a') as res:
-            res.write(f'{file_name} - train: {np.round(mse_train, 3)} CV: {np.round(reg_cv_score, 3)}\n')
+            res.write(f'{file_name} {i} drop - train: {np.round(mse_train, 3)} CV: {np.round(reg_cv_score, 3)}\n')
         if best_score is None or reg_cv_score < best_score:
             best_score = reg_cv_score
             best_reg = reg
+            best_reg_str = str(i)
         print('dropping unimportant columns')
-        drop_reg = Regressor('xgboost', 50, 20)
+        drop_reg = Regressor('xgboost', 50, 25)
         drop_cols_reg = [c for c, s in features_scores if s < 0.001]
         drop_reg.fit(X_train.drop(columns=[c for c in X_train.columns if c in drop_this_columns] + drop_cols_reg), y_train)
         drop_reg.save(file_name + f'_{i}_drop.pkl')
@@ -102,24 +103,29 @@ def fit_regressor_final(train, drop_cols, file_name):
         print("MSE CV: ", drop_reg_cv_score)
         print("MSE train: ", drop_mse_train)
         with open('results_file.txt', 'a') as res:
-            res.write(f'{file_name} - train: {np.round(mse_train, 3)} CV: {np.round(drop_reg_cv_score, 3)}\n')
-        if best_score is None or reg_cv_score < best_score:
+            res.write(f'{file_name} {i} drop - train: {np.round(drop_mse_train, 3)} CV: {np.round(drop_reg_cv_score, 3)}\n')
+        if best_score is None or drop_reg_cv_score < best_score:
             best_score = drop_reg_cv_score
             best_reg = drop_reg
+            best_reg_str = str(i) + '_drop'
+    print('BEST REG FOR:', file_name, 'REG:', best_reg_str, 'CV:', best_score)
+    with open('results_file.txt', 'a') as res:
+        res.write(f'BEST REG FOR {file_name} - {best_reg_str} - CV: {np.round(best_score, 3)}\n')
     best_reg.save(file_name + '_final.pkl')
     return best_reg
 
 
 def predict(data, reg_regular, reg_new_budget, reg_no_budget):
-    data['id'] = data.index
-    budget_1k, budget_10k, regular, new_budget, no_budget = split_data_to_models(data)
+    data = data.reset_index()
+    budget_1k, budget_10k, regular, new_budget, no_budget = split_data_to_models(data.copy())
     budget_1k['pred_revenue'] = budget_1k['budget'] * 1.4
     budget_10k['pred_revenue'] = budget_10k['budget'] * 1.1
     regular['pred_revenue'] = reg_regular.predict(regular.drop(columns=['id']))
     new_budget['pred_revenue'] = reg_new_budget.predict(new_budget.drop(columns=['id']))
     no_budget['pred_revenue'] = reg_no_budget.predict(no_budget.drop(columns=[c for c in no_budget.columns if 'budget' in c] + ['id']))
-    predctions = pd.concat([budget_1k, budget_10k, regular, new_budget, no_budget], axis=0)[['id', 'pred_revenue']]
-    return pd.merge(data, predctions, on='id', how='inner')
+    predictions = pd.merge(data[['id']], pd.concat([budget_1k, budget_10k, regular, new_budget, no_budget], axis=0)[['id', 'pred_revenue']]\
+        .rename(columns={'pred_revenue':'revenue'}), on='id')
+    return predictions
 
 
 def predict_all(data, reg_regular, reg_new_budget, reg_no_budget, reg_no_budget_all):
@@ -147,18 +153,23 @@ if __name__ == '__main__':
     print('finished preprocessing')
     y_train, y_test = train['revenue'], np.log(test['revenue'] + 1)
     test = preprocess.transform(test)
-    test['revenue'] = y_test
+    test['revenue'] = y_test.values
     budget_1k_train, budget_10k_train, regular_train, new_budget_train, no_budget_train = split_data_to_models(train)
     reg_regular = fit_regressor_final(regular_train, [], file_name=f'regular')
+    reg_new_budget = fit_regressor_final(new_budget_train, [], file_name=f'new_budget')
     all_train = pd.concat([regular_train, new_budget_train, no_budget_train], axis=0)
     missing_budget_train = pd.concat([new_budget_train, no_budget_train], axis=0)
     reg_no_budget_all = fit_regressor_final(all_train, [c for c in all_train.columns if 'budget' in c], file_name=f'no_budget_columns_all')
     reg_no_budget_missing = fit_regressor_final(missing_budget_train, [c for c in missing_budget_train.columns if 'budget' in c], file_name=f'no_budget_columns_missing')
     if reg_no_budget_all.best_score > reg_no_budget_missing.best_score:
         reg_no_budget = reg_no_budget_all
+        print('BEST REG FOR no_budget:', 'all', 'CV:', -reg_no_budget_all.best_score)
     else:
         reg_no_budget = reg_no_budget_missing
+        print('BEST REG FOR no_budget:', 'missing', 'CV:', -reg_no_budget_missing.best_score)
     reg_no_budget.save('no_budget_final.pkl')
-    reg_new_budget = fit_regressor_final(new_budget_train, [], file_name=f'new_budget')
+
     test_predicted = predict(test.drop(columns=['revenue']), reg_regular, reg_new_budget, reg_no_budget)
-    print('Combined:', mean_squared_error(test['revenue'], test_predicted['pred_revenue']))
+    print(test.index.tolist())
+    print(test_predicted['id'].tolist())
+    print('Combined:', mean_squared_error(test['revenue'], test_predicted['revenue']))

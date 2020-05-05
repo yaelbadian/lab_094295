@@ -45,6 +45,7 @@ def predict(data, reg_regular, reg_new_budget, reg_no_budget):
     return predictions
 
 preprocess = Preprocess.load(preprocess_file)
+y_true = data['revenue']
 data = preprocess.transform(data.reset_index(drop=True))
 reg_regular = Regressor.load(reg_regular_file)
 reg_no_budget = Regressor.load(reg_no_budget_file)
@@ -52,27 +53,28 @@ reg_new_budget = Regressor.load(reg_new_budget_file)
 
 
 prediction_df = predict(data, reg_regular, reg_new_budget, reg_no_budget)
+data['revenue'] = y_true
 ####
 
 # TODO - How to export prediction results
 prediction_df.to_csv("prediction.csv", index=False, header=False)
 
 
-# ### Utility function to calculate RMSLE
-# def rmsle(y_true, y_pred):
-#     """
-#     Calculates Root Mean Squared Logarithmic Error between two input vectors
-#     :param y_true: 1-d array, ground truth vector
-#     :param y_pred: 1-d array, prediction vector
-#     :return: float, RMSLE score between two input vectors
-#     """
-#     assert y_true.shape == y_pred.shape, \
-#         ValueError("Mismatched dimensions between input vectors: {}, {}".format(y_true.shape, y_pred.shape))
-#     return np.sqrt((1/len(y_true)) * np.sum(np.power(np.log(y_true + 1) - np.log(y_pred + 1), 2)))
-#
-#
-# ### Example - Calculating RMSLE
-# res = rmsle(data['revenue'], prediction_df['revenue'])
-# print("RMSLE is: {:.6f}".format(res))
+### Utility function to calculate RMSLE
+def rmsle(y_true, y_pred):
+    """
+    Calculates Root Mean Squared Logarithmic Error between two input vectors
+    :param y_true: 1-d array, ground truth vector
+    :param y_pred: 1-d array, prediction vector
+    :return: float, RMSLE score between two input vectors
+    """
+    assert y_true.shape == y_pred.shape, \
+        ValueError("Mismatched dimensions between input vectors: {}, {}".format(y_true.shape, y_pred.shape))
+    return np.sqrt((1/len(y_true)) * np.sum(np.power(np.log(y_true + 1) - np.log(y_pred + 1), 2)))
+
+
+### Example - Calculating RMSLE
+res = rmsle(data['revenue'], prediction_df['revenue'])
+print("RMSLE is: {:.6f}".format(res))
 
 

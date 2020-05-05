@@ -98,8 +98,8 @@ class Regressor:
         parameters = {"eta": (0.001, 0.7),
                       "gamma": (0, 15),
                       "max_depth": (1, 30),
-                      "n_estimators": (1, 40),
-                      "min_child_weight": (1, 50)}
+                      "n_estimators": (1, 42),
+                      "min_child_weight": (1, 70)}
         return cv_function, parameters
 
     # ----- lasso ----- #
