@@ -11,6 +11,9 @@ class Preprocess:
     def __init__(self, scale):
         self.tops = {'original_language': ['en', 'fr', 'hi', 'ja', 'es', 'ru', 'ko', 'it', 'zh', 'cn', 'de']}
         self.cnts = {}
+        self.yearly_df = None
+        self.yearly_bins = None
+        self.new_budgets = pd.read_csv('budgets.csv')
         self.scale = scale
         self.scaler = None
         self.scaler_columns = []
@@ -57,26 +60,55 @@ class Preprocess:
         # release_date
         data['release_date'] = pd.to_datetime(data['release_date'])
         data['year'] = data['release_date'].dt.year
+        data['year'] = data['year'].where(data['year'] >= 1940, 1939)
         data['month'] = data['release_date'].dt.month
-        data['no_budget'] = data['budget'] == 0
+        data['no_budget'] = (data['budget'] == 0) | (data['budget'].isna())
+        data['low_budget'] = (data['budget'].between(1, 10000))
         data['budget'] = np.log(data['budget'] + 1)
+        data['popularity'] = data['popularity'].where(data['popularity'] < 100, 100)
         data['collection'] = data['belongs_to_collection_len'] > 0
         data['homepage'] = data['homepage'].notna()
         data['poster_path'] = data['poster_path'].notna()
-        data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data['runtime'].median()
-        data['budget_to_popularity'] = data['budget'] / (data['popularity'] + 1)
-        data['budget_to_runtime'] = data['budget'] / (data['runtime'] + 1)
-        data['budget_year_ratio'] = data['budget'] / (data['year'] - 1900)**2
-        data['year_popularity_ratio'] = data['year'] / (data['popularity'] + 1)
-        data['year_popularity_ratio2'] = data['popularity'] / data['year']
-        data['year_to_budget'] = data['year'] / (data['budget'] + 1)
-        data['budget_to_runtime_to_year'] = data['budget_to_runtime'] / data['year']
-        data['budget_to_vote_count'] = data['budget'] / (data['vote_count'] + 1)
-        data['vote_count_to_budget'] = data['vote_count'] / (data['budget'] + 1)
-        data['vote_count_to_year'] = data['vote_count'] / (data['year'] - 1900)
-        data['budget_to_vote_count_to_year'] = data['budget'] / (data['vote_count_to_year'] + 1)
+        if init:
+            data['date_bin'], self.yearly_bins = pd.qcut(data['release_date'], q=40, retbins=True)
+            self.yearly_df = pd.merge(data[['date_bin']].drop_duplicates().sort_values(by='date_bin'),
+                                      data[data['low_budget'] == False][['date_bin', 'budget', 'popularity', 'runtime',
+                                                                         'vote_average', 'vote_count']].groupby(
+                                          'date_bin').median().reset_index(),
+                                      on='date_bin', how='left')
+            self.yearly_df[['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']] = self.yearly_df[
+                ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']].fillna(method='ffill')
+        data['date_bin'] = pd.cut(data['release_date'], self.yearly_bins)
+        data = pd.merge(data, self.yearly_df, on='date_bin', how='left', suffixes=('', '_yearly'))
+        # filling nans
+        data = pd.merge(data, self.new_budgets[['imdb_id', 'final_budget']], on='imdb_id', how='left')
+        data.loc[(data['no_budget']) & (data['final_budget'].notna()), 'budget'] = data.loc[
+            (data['no_budget']) & (data['final_budget'].notna()), 'final_budget']
+        data.loc[((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime'] = data.loc[
+            ((data['runtime'] == 0) | (data['runtime'].isna())), 'runtime_yearly']
+        data['new_budget'] = (data['no_budget']) & (data['budget'] > 0)
+        for col in ['popularity', 'vote_average', 'vote_count']:
+            data.loc[data[col].isna(), col] = data.loc[data[col].isna(), col + '_yearly']
+        # ratios
+        for col in ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']:
+            data[col + '_ratio'] = data[col] / (data[col + '_yearly'] + 1)
+        # interactions
+        for col_num in ['budget', 'popularity', 'vote_average']:
+            for col_denom in ['budget', 'popularity', 'runtime', 'vote_average']:
+                if col_num == col_denom:
+                    continue
+                else:
+                    if col_num < col_denom:
+                        data[col_num + '_' + col_denom + '_m_interaction'] = data[col_num] * data[col_denom]
+                        data[col_num + '_' + col_denom + '_m_ratio_interaction'] = data[col_num] * data[
+                            col_denom + '_ratio']
+                    data[col_num + '_' + col_denom + '_d_interaction'] = data[col_num] / (data[col_denom] + 1)
+                    data[col_num + '_' + col_denom + '_d_ratio_interaction'] = data[col_num] / (
+                                data[col_denom + '_ratio'] + 0.0001)
+        # remove yearly
+        data = data.drop(columns=[col for col in data.columns if col.endswith('_yearly')])
 
-
+        # add binaries
         data = self.list2binary(data, 'genres_names')
         data = self.list2binary(data, 'production_countries_names')
         data = self.list2binary(data, 'production_companies_names')
@@ -102,20 +134,18 @@ class Preprocess:
                 self.scaler = StandardScaler()
                 self.scaler_columns = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'year',
                                        'month', 'genres_len', 'production_companies_len', 'production_countries_len',
-                                       'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len', 'budget_to_popularity',
-                                       'budget_to_runtime', 'budget_year_ratio', 'year_popularity_ratio',
-                                       'year_popularity_ratio2', 'year_to_budget', 'budget_to_runtime_to_year',
-                                       'budget_to_vote_count', 'vote_count_to_budget', 'vote_count_to_year',
-                                       'budget_to_vote_count_to_year', 'production_companies_names_1-3',
-                                       'production_companies_names_4-10', 'production_countries_names_0-10',
-                                       'production_countries_names_11-50', 'cast_names_4-10000']
+                                       'Keywords_len', 'cast_len', 'crew_len', 'crew_jobs_len',
+                                       'production_companies_names_1-3', 'production_companies_names_4-10',
+                                       'production_countries_names_0-10', 'production_countries_names_11-50',
+                                       'cast_names_4-10000'] + [col for col in data.columns if
+                                                            (col.endswith('_interaction') or col.endswith('_ratio'))]
                 self.scaler.fit(data[self.scaler_columns])
 
             data[self.scaler_columns] = self.scaler.transform(data[self.scaler_columns])
 
         data = data.drop(
             columns=['backdrop_path', 'original_title', 'overview', 'status', 'id', 'tagline', 'title', 'video',
-                     'release_date', 'belongs_to_collection', 'genres', 'imdb_id',
+                     'release_date', 'belongs_to_collection', 'genres', 'imdb_id', 'date_bin',
                      'production_companies', 'production_countries', 'spoken_languages', 'Keywords', 'cast',
                      'crew', 'genres_names', 'belongs_to_collection_names', 'belongs_to_collection_len',
                      'production_companies_names', 'production_countries_names', 'Keywords_names', 'cast_names',

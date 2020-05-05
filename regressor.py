@@ -5,6 +5,7 @@ from sklearn.model_selection import cross_val_score
 from xgboost import XGBRegressor
 import pickle
 import seaborn as sns
+import pandas as pd
 sns.set()
 
 class Regressor:
@@ -34,6 +35,8 @@ class Regressor:
         self._feature_importances_ = None
         self._init_points = init_points
         self._n_iter = n_iter
+        self._x_columns = []
+        self._best_score = None
 
     def _bayesian_optimization(self, cv_function, parameters):
         gp_params = {"alpha": 1e-5, 'init_points': self._init_points, 'n_iter': self._n_iter}
@@ -92,11 +95,11 @@ class Regressor:
             return cross_val_score(Regressor._init_XGBRegressor(params), X=X, y=y, cv=cv_splits,
                                    scoring=scoring, n_jobs=n_jobs).mean()
 
-        parameters = {"eta": (0.001, 0.4),
+        parameters = {"eta": (0.001, 0.7),
                       "gamma": (0, 15),
-                      "max_depth": (1, 40),
-                      "n_estimators": (1, 80),
-                      "min_child_weight": (1, 40)}
+                      "max_depth": (1, 30),
+                      "n_estimators": (1, 40),
+                      "min_child_weight": (1, 50)}
         return cv_function, parameters
 
     # ----- lasso ----- #
@@ -122,6 +125,10 @@ class Regressor:
     # -------------- sklearn API functions -------------- #
 
     def fit(self, X, y, cv_splits=5, scoring='neg_mean_squared_error', n_jobs=-1):
+        if isinstance(X, pd.DataFrame):
+            self._x_columns = X.columns.tolist()
+        else:
+            self._x_columns = list(range(X.shape[1]))
         if self._model_str in ('regressor'):
             models_to_check = ('xgbreg', 'rfr', 'lasso')
             best_model, best_score, best_params = None, None, None
@@ -134,6 +141,7 @@ class Regressor:
                 print(f'\tResults for {model_str}:\n\t\tbest params={params}\n\t\tbest score={score}')
                 if best_score is None or score > best_score:
                     best_model, best_score, best_params = model, score, params
+            self._best_score = best_score
             best_model._fit(X, y, cv_splits, scoring, n_jobs, best_params)
             self.__dict__.update(best_model.__dict__)
             return self._fitted_model
@@ -145,6 +153,7 @@ class Regressor:
             cv_function, parameters = self._optimize_function(X, y, cv_splits, scoring, n_jobs)
             best_solution = self._bayesian_optimization(cv_function, parameters)
             params = best_solution["params"]
+            self._best_score = best_solution["target"]
         model = self._init_function(params)
         model.fit(X, y)
         self._fitted_model = model
@@ -156,7 +165,7 @@ class Regressor:
 
     def predict(self, X):
         if self._fitted_model is not None:
-            return self._fitted_model.predict(X)
+            return self._fitted_model.predict(X[self.x_columns])
         else:
             raise Exception('Model should be fitted before prediction')
 
@@ -180,6 +189,14 @@ class Regressor:
     @feature_importances_.setter
     def feature_importances_(self, value):
         self._feature_importances_ = value
+
+    @property
+    def x_columns(self):
+        return self._x_columns
+
+    @property
+    def best_score(self):
+        return self._best_score
 
     def save(self, fname):
         with open(fname, 'wb') as file:
