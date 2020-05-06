@@ -6,4 +6,4 @@ scikit-learn==0.22.2
 seaborn==0.10.0
 bayesian-optimization==1.1.0
 xgboost==1.0.2
-metric-learn=0.5.0
+metric-learn==0.5.0
