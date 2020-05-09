@@ -36,7 +36,7 @@ def predict(data, reg_regular, reg_new_budget, reg_no_budget):
     budget_1k['pred_revenue'] = budget_1k['budget'] * 1.4
     budget_10k['pred_revenue'] = budget_10k['budget'] * 1.1
     regular['pred_revenue'] = reg_regular.predict(regular.drop(columns=['id']))
-    new_budget['pred_revenue'] = reg_new_budget.predict(new_budget.drop(columns=['id']))
+    new_budget['pred_revenue'] = reg_no_budget.predict(new_budget.drop(columns=[c for c in no_budget.columns if 'budget' in c] + ['id']))
     no_budget['pred_revenue'] = reg_no_budget.predict(no_budget.drop(columns=[c for c in no_budget.columns if 'budget' in c] + ['id']))
     predictions = pd.merge(data[['id']], pd.concat([budget_1k, budget_10k, regular, new_budget, no_budget], axis=0)[['id', 'pred_revenue']]\
         .rename(columns={'pred_revenue':'revenue'}), on='id')
@@ -74,7 +74,7 @@ def rmsle(y_true, y_pred):
 
 
 ### Example - Calculating RMSLE
-res = rmsle(data['revenue'], prediction_df['revenue'])
+res = rmsle(data['revenue'].values, prediction_df['revenue'].values)
 print("RMSLE is: {:.6f}".format(res))
 
 

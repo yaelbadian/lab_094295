@@ -84,7 +84,7 @@ def fit_regressor_final(train, drop_cols, file_name):
         print("MSE CV: ", reg_cv_score)
         print("MSE train: ", mse_train)
         with open('results_file.txt', 'a') as res:
-            res.write(f'{file_name} {i} drop - train: {np.round(mse_train, 3)} CV: {np.round(reg_cv_score, 3)}\n')
+            res.write(f'{file_name} {i} - train: {np.round(mse_train, 3)} CV: {np.round(reg_cv_score, 3)}\n')
         if best_score is None or reg_cv_score < best_score:
             best_score = reg_cv_score
             best_reg = reg
