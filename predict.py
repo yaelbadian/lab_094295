@@ -53,7 +53,7 @@ reg_new_budget = Regressor.load(reg_new_budget_file)
 
 
 prediction_df = predict(data, reg_regular, reg_new_budget, reg_no_budget)
-data['revenue'] = y_true
+data['revenue'] = y_true.values
 ####
 
 # TODO - How to export prediction results
